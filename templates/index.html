@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DNS Spy — Domain Intelligence</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer" />
+  <script>
+    (function(){var t=localStorage.getItem('dns-spy-theme')||(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);})();
+  </script>
+</head>
+<body>
+  <button class="theme-toggle hero-toggle" aria-label="Toggle theme"><i class="fa-solid fa-moon"></i></button>
+
+  <div class="hero">
+    <header class="hero-header">
+      <div class="logo">
+        <span class="logo-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
+        <span class="logo-text">DNS<strong>Spy</strong></span>
+      </div>
+      <p class="tagline">Comprehensive domain intelligence in one click</p>
+    </header>
+
+    <main class="hero-main">
+      {% if error %}
+      <div class="alert alert-error" role="alert">
+        <i class="fa-solid fa-triangle-exclamation alert-icon"></i>
+        <span>{{ error }}</span>
+      </div>
+      {% endif %}
+
+      <form class="search-form" action="/analyze" method="POST">
+        <div class="search-box">
+          <span class="search-prefix"><i class="fa-solid fa-globe"></i></span>
+          <input
+            type="text"
+            name="domain"
+            id="domain"
+            class="search-input"
+            placeholder="example.com"
+            autofocus
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+          />
+          <button type="submit" class="search-btn">
+            <span class="btn-text">Analyze</span>
+            <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+        <p class="search-hint">Enter a domain or paste a full URL, e.g. <code>github.com</code></p>
+      </form>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <span class="feature-icon"><i class="fa-solid fa-clipboard-list"></i></span>
+          <h3>WHOIS</h3>
+          <p>Registrar, owner &amp; key dates</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon"><i class="fa-solid fa-link"></i></span>
+          <h3>DNS Records</h3>
+          <p>A, MX, NS, TXT, CNAME &amp; more</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon"><i class="fa-solid fa-lock"></i></span>
+          <h3>SSL / TLS</h3>
+          <p>Certificate details &amp; expiry</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon"><i class="fa-solid fa-earth-europe"></i></span>
+          <h3>Geolocation</h3>
+          <p>Country, city &amp; ISP (IPv4 + IPv6)</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon"><i class="fa-solid fa-satellite-dish"></i></span>
+          <h3>HTTP Headers</h3>
+          <p>Response headers &amp; security grade</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon"><i class="fa-solid fa-rotate-left"></i></span>
+          <h3>Reverse DNS</h3>
+          <p>PTR records for all IPs</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon"><i class="fa-solid fa-envelope-circle-check"></i></span>
+          <h3>Email Security</h3>
+          <p>DMARC, SPF &amp; DKIM records</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon"><i class="fa-solid fa-camera"></i></span>
+          <h3>Screenshot</h3>
+          <p>Visual website preview</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon"><i class="fa-solid fa-gears"></i></span>
+          <h3>Tech Stack</h3>
+          <p>CMS, frameworks &amp; services</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon"><i class="fa-solid fa-scroll"></i></span>
+          <h3>Cert Transparency</h3>
+          <p>All certs logged in CT logs</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon"><i class="fa-solid fa-code"></i></span>
+          <h3>HTML Subdomains</h3>
+          <p>Subdomains found in page source</p>
+        </div>
+      </div>
+    </main>
+
+    <footer class="hero-footer">
+      <p>DNS Spy — All lookups run in parallel &bull; Results cached for 5 minutes
+        &bull; <button class="footer-link" id="aboutBtnFooter"><i class="fa-solid fa-circle-info"></i> About</button></p>
+    </footer>
+  </div>
+
+  <!-- About modal -->
+  <div class="modal-backdrop" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+    <div class="modal-box">
+      <button class="modal-close" id="aboutClose" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal-logo">
+        <span class="logo-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
+        <span class="logo-text">DNS<strong>Spy</strong></span>
+      </div>
+      <p id="aboutTitle" class="modal-tagline">Comprehensive domain intelligence in one click</p>
+      <div class="modal-section">
+        <h3><i class="fa-solid fa-layer-group"></i> What it does</h3>
+        <p>DNS Spy runs 16+ analysis modules in parallel — WHOIS, RDAP, DNS records, SSL/TLS, Geolocation, ASN/BGP, HTTP headers, WAF detection, cookie security, reverse DNS, email security (SPF/DMARC/DKIM), certificate transparency, HTML subdomains, screenshot, tech stack, SaaS detection, and an aggregate security score.</p>
+      </div>
+      <div class="modal-section">
+        <h3><i class="fa-solid fa-user"></i> Author</h3>
+        <p><strong>Julien Mousqueton</strong><br>CISO @ Cohesity<br>Owner of <a href="https://www.ransomware.live" target="_blank" rel="noopener">ransomware.live</a></p>
+      </div>
+      <div class="modal-section">
+        <h3><i class="fa-solid fa-code"></i> Stack</h3>
+        <p>Python 3 · Flask · dnspython · requests · Playwright (screenshots) · Vanilla JS</p>
+      </div>
+      <div class="modal-footer-note">Built for internal security &amp; recon workflows.</div>
+    </div>
+  </div>
+
+  <script src="/static/js/main.js"></script>
+</body>
+</html>

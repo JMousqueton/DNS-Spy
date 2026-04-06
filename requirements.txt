@@ -1,0 +1,25 @@
+# DNS Spy — Python dependencies
+
+# Web framework
+flask>=3.0,<4.0
+
+# WHOIS
+python-whois>=0.9.4
+
+# DNS lookups
+dnspython>=2.6,<3.0
+
+# HTTP requests
+requests>=2.31,<3.0
+
+# SSL / certificate parsing
+cryptography>=42.0,<44.0
+
+# Screenshot (optional — also requires: playwright install chromium)
+playwright>=1.44,<2.0
+
+# Utilities
+Werkzeug>=3.0,<4.0
+
+# .env file support
+python-dotenv>=1.0,<2.0

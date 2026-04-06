@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ domain }} — DNS Spy</title>
+  <link rel="stylesheet" href="/static/css/style.css?v=3" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer" />
+  <script>
+    (function(){var t=localStorage.getItem('dns-spy-theme')||(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);})();
+  </script>
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="/" class="nav-logo">
+    <span class="logo-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
+    <span class="logo-text">DNS<strong>Spy</strong></span>
+  </a>
+  <form class="nav-search" action="/analyze" method="POST">
+    <input type="text" name="domain" class="nav-input" value="{{ domain }}" autocomplete="off" autocapitalize="none" spellcheck="false" />
+    <button type="submit" class="nav-btn">Analyze</button>
+  </form>
+  {% if from_cache %}
+  <span class="cache-badge" title="Served from cache"><i class="fa-solid fa-bolt"></i> Cached</span>
+  {% endif %}
+  <button class="about-btn" id="aboutBtn" aria-label="About DNS Spy"><i class="fa-solid fa-circle-info"></i></button>
+  <button class="theme-toggle" aria-label="Toggle theme"><i class="fa-solid fa-moon"></i></button>
+</nav>
+
+<div class="results-container">
+
+  <div class="results-header">
+    <h1 class="domain-title"><i class="fa-solid fa-globe"></i> {{ domain }}</h1>
+    <div class="quick-chips">
+      {% if data.geo and not data.geo.error %}
+        <span class="chip"><i class="fa-solid fa-earth-europe"></i> {{ data.geo.country or 'Unknown' }}</span>
+        <span class="chip"><i class="fa-solid fa-building"></i> {{ data.geo.isp or 'Unknown ISP' }}</span>
+        <span class="chip"><i class="fa-solid fa-server"></i> {{ data.geo.ip }}</span>
+        {% if data.geo.ipv6 %}<span class="chip"><i class="fa-solid fa-6"></i> IPv6</span>{% endif %}
+      {% endif %}
+      {% if data.ssl and not data.ssl.error %}
+        {% if data.ssl.expired %}
+          <span class="chip chip-danger"><i class="fa-solid fa-lock-open"></i> SSL Expired</span>
+        {% elif data.ssl.expiring_soon %}
+          <span class="chip chip-warn"><i class="fa-solid fa-triangle-exclamation"></i> SSL Expiring ({{ data.ssl.days_remaining }}d)</span>
+        {% else %}
+          <span class="chip chip-ok"><i class="fa-solid fa-lock"></i> SSL Valid ({{ data.ssl.days_remaining }}d)</span>
+        {% endif %}
+      {% endif %}
+      {% if data.headers and not data.headers.error %}
+        <span class="chip chip-grade-{{ data.headers.security_grade | lower }}"><i class="fa-solid fa-shield-halved"></i> Headers: {{ data.headers.security_grade }}</span>
+      {% endif %}
+      {% if data.security_score %}
+        <a href="#score" class="chip chip-score chip-grade-{{ data.security_score.grade | lower }}">
+          <i class="fa-solid fa-shield"></i> Score: <strong>{{ data.security_score.grade }}</strong> ({{ data.security_score.percent }}%)
+        </a>
+      {% endif %}
+      {% if data.waf and data.waf.detected %}
+        <span class="chip"><i class="fa-solid fa-tower-broadcast"></i> {{ data.waf.detected[0].name }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="sidebar-layout">
+    <aside class="toc">
+      <ul>
+        <li><a href="#score"><i class="fa-solid fa-shield fa-fw"></i> Security Score</a></li>
+        <li><a href="#whois"><i class="fa-solid fa-clipboard-list fa-fw"></i> WHOIS</a></li>
+        <li><a href="#rdap"><i class="fa-solid fa-database fa-fw"></i> RDAP</a></li>
+        <li><a href="#dns"><i class="fa-solid fa-link fa-fw"></i> DNS Records</a></li>
+        <li><a href="#ssl"><i class="fa-solid fa-lock fa-fw"></i> SSL/TLS</a></li>
+        <li><a href="#geo"><i class="fa-solid fa-earth-europe fa-fw"></i> Geolocation</a></li>
+        <li><a href="#asn"><i class="fa-solid fa-network-wired fa-fw"></i> ASN / BGP</a></li>
+        <li><a href="#headers"><i class="fa-solid fa-satellite-dish fa-fw"></i> HTTP Headers</a></li>
+        <li><a href="#waf"><i class="fa-solid fa-tower-broadcast fa-fw"></i> WAF / CDN</a></li>
+        <li><a href="#cookies"><i class="fa-solid fa-cookie-bite fa-fw"></i> Cookies</a></li>
+        <li><a href="#reverse"><i class="fa-solid fa-rotate-left fa-fw"></i> Reverse DNS</a></li>
+        <li><a href="#email"><i class="fa-solid fa-envelope-circle-check fa-fw"></i> Email Security</a></li>
+        <li><a href="#ct"><i class="fa-solid fa-scroll fa-fw"></i> Cert Transparency</a></li>
+        <li><a href="#html-subs"><i class="fa-solid fa-code fa-fw"></i> HTML Subdomains</a></li>
+        <li><a href="#screenshot"><i class="fa-solid fa-camera fa-fw"></i> Screenshot</a></li>
+        <li><a href="#tech"><i class="fa-solid fa-gears fa-fw"></i> Tech Stack</a></li>
+        <li><a href="#saas"><i class="fa-solid fa-cloud fa-fw"></i> SaaS Services</a></li>
+      </ul>
+    </aside>
+
+    <main class="sections">
+
+      <!-- Security Score -->
+      <section id="score" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-shield"></i> Security Score</h2>
+        {% set sc = data.security_score %}
+        {% if sc %}
+        <div class="score-hero">
+          <div class="score-grade grade-{{ sc.grade | lower }}">{{ sc.grade }}</div>
+          <div class="score-info">
+            <div class="score-number">{{ sc.score }} / {{ sc.max_score }}</div>
+            <div class="score-bar-wrap">
+              <div class="score-bar grade-{{ sc.grade | lower }}-bar" style="width:{{ sc.percent }}%"></div>
+            </div>
+            <div class="score-pct">{{ sc.percent }}%</div>
+          </div>
+        </div>
+        {% for category, checks in sc.by_category.items() %}
+        <div class="subsection">
+          <h3>{{ category }}</h3>
+          <div class="score-checks">
+            {% for c in checks %}
+            <div class="score-check score-check-{{ c.status }}">
+              <span class="check-icon">
+                {% if c.status == 'pass' %}<i class="fa-solid fa-circle-check"></i>
+                {% elif c.status == 'warn' %}<i class="fa-solid fa-triangle-exclamation"></i>
+                {% elif c.status == 'info' %}<i class="fa-solid fa-circle-info"></i>
+                {% else %}<i class="fa-solid fa-circle-xmark"></i>{% endif %}
+              </span>
+              <span class="check-name">{{ c.name }}</span>
+              <span class="check-detail">{{ c.detail }}</span>
+              <span class="check-pts">{{ c.pts }}/{{ c.max }}</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+      </section>
+
+      <!-- WHOIS -->
+      <section id="whois" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-clipboard-list"></i> WHOIS Information</h2>
+        {% set w = data.whois %}
+        {% if w.error %}
+          <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> {{ w.error }}</div>
+        {% else %}
+          <div class="table-wrap">
+            <table class="info-table">
+              <tbody>
+                {% if w.registrar %}<tr><th>Registrar</th><td>{{ w.registrar }}</td></tr>{% endif %}
+                {% if w.registrar_url %}<tr><th>Registrar URL</th><td><a href="{{ w.registrar_url }}" target="_blank" rel="noopener">{{ w.registrar_url }}</a></td></tr>{% endif %}
+                {% if w.creation_date %}<tr><th>Created</th><td>{{ w.creation_date }}</td></tr>{% endif %}
+                {% if w.updated_date %}<tr><th>Updated</th><td>{{ w.updated_date }}</td></tr>{% endif %}
+                {% if w.expiration_date %}<tr><th>Expires</th><td>{{ w.expiration_date }}</td></tr>{% endif %}
+                {% if w.org %}<tr><th>Organization</th><td>{{ w.org }}</td></tr>{% endif %}
+                {% if w.country %}<tr><th>Country</th><td>{{ w.country }}</td></tr>{% endif %}
+                {% if w.dnssec %}<tr><th>DNSSEC</th><td>{{ w.dnssec }}</td></tr>{% endif %}
+                {% if w.whois_server %}<tr><th>WHOIS Server</th><td>{{ w.whois_server }}</td></tr>{% endif %}
+              </tbody>
+            </table>
+          </div>
+          {% if w.name_servers %}
+          <div class="subsection">
+            <h3>Name Servers</h3>
+            <ul class="tag-list">
+              {% for ns in w.name_servers %}<li class="tag">{{ ns }}</li>{% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+          {% if w.status %}
+          <div class="subsection">
+            <h3>Domain Status</h3>
+            <ul class="tag-list">
+              {% for s in w.status %}<li class="tag tag-sm">{{ s }}</li>{% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+          {% if w.emails %}
+          <div class="subsection">
+            <h3>Contact Emails</h3>
+            <ul class="tag-list">
+              {% for e in w.emails %}<li class="tag">{{ e }}</li>{% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+        {% endif %}
+      </section>
+
+      <!-- RDAP -->
+      <section id="rdap" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-database"></i> RDAP Information</h2>
+        {% set rd = data.rdap %}
+        {% if rd.error %}
+          <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> {{ rd.error }}</div>
+        {% else %}
+          <div class="table-wrap">
+            <table class="info-table">
+              <tbody>
+                {% if rd.domain %}<tr><th>Domain</th><td>{{ rd.domain }}</td></tr>{% endif %}
+                {% if rd.handle %}<tr><th>Registry ID</th><td><code>{{ rd.handle }}</code></td></tr>{% endif %}
+                {% if rd.registrar %}<tr><th>Registrar</th><td>{{ rd.registrar.name or rd.registrar.org or '—' }}</td></tr>{% endif %}
+                {% if rd.created %}<tr><th>Created</th><td>{{ rd.created }}</td></tr>{% endif %}
+                {% if rd.updated %}<tr><th>Updated</th><td>{{ rd.updated }}</td></tr>{% endif %}
+                {% if rd.expires %}<tr><th>Expires</th><td>{{ rd.expires }}</td></tr>{% endif %}
+                <tr><th>DNSSEC</th><td><span class="badge {% if rd.dnssec %}badge-ok{% else %}badge-warn{% endif %}">{{ 'Signed' if rd.dnssec else 'Unsigned' }}</span></td></tr>
+                {% if rd.rdap_url %}<tr><th>RDAP Source</th><td><a href="{{ rd.rdap_url }}" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> {{ rd.rdap_url }}</a></td></tr>{% endif %}
+              </tbody>
+            </table>
+          </div>
+          {% if rd.status %}
+          <div class="subsection">
+            <h3>Status</h3>
+            <ul class="tag-list">
+              {% for s in rd.status %}<li class="tag tag-sm">{{ s }}</li>{% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+          {% if rd.nameservers %}
+          <div class="subsection">
+            <h3>Name Servers</h3>
+            <ul class="tag-list">
+              {% for ns in rd.nameservers %}<li class="tag">{{ ns }}</li>{% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+          {% if rd.entities %}
+          <div class="subsection">
+            <h3>Contacts</h3>
+            <div class="table-wrap">
+              <table class="info-table">
+                <thead><tr><th>Role</th><th>Name / Org</th><th>Email(s)</th></tr></thead>
+                <tbody>
+                  {% for entity in rd.entities %}
+                  {% if entity.roles and (entity.name or entity.org or entity.emails) %}
+                  <tr>
+                    <td>{% for r in entity.roles %}<span class="badge badge-info">{{ r }}</span> {% endfor %}</td>
+                    <td>{{ entity.name or entity.org or '—' }}</td>
+                    <td>{% if entity.emails %}{% for e in entity.emails %}{{ e }} {% endfor %}{% else %}—{% endif %}</td>
+                  </tr>
+                  {% endif %}
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {% endif %}
+        {% endif %}
+      </section>
+
+      <!-- DNS Records -->
+      <section id="dns" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-link"></i> DNS Records</h2>
+        {% set d = data.dns %}
+        {% if d.error %}
+          <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> {{ d.error }}</div>
+        {% else %}
+          {% for rtype, records in d.records.items() %}
+          <div class="dns-block">
+            <h3 class="record-type">{{ rtype }}</h3>
+            {% if records %}
+              <ul class="record-list">
+                {% for r in records %}
+                <li class="record-item"><code>{{ r }}</code></li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <span class="no-record">No {{ rtype }} records found</span>
+            {% endif %}
+          </div>
+          {% endfor %}
+        {% endif %}
+      </section>
+
+      <!-- SSL/TLS -->
+      <section id="ssl" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-lock"></i> SSL / TLS Certificate</h2>
+        {% set s = data.ssl %}
+        {% if s.error %}
+          <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> {{ s.error }}</div>
+        {% else %}
+          {% if s.verification_skipped %}
+          <div class="alert alert-warn"><i class="fa-solid fa-triangle-exclamation"></i> Certificate validation was skipped (MITM/proxy mode) — displayed cert may belong to the proxy</div>
+          {% endif %}
+          {% if s.expired %}
+          <div class="alert alert-error"><i class="fa-solid fa-lock-open"></i> Certificate has EXPIRED</div>
+          {% elif s.expiring_soon %}
+          <div class="alert alert-warn"><i class="fa-solid fa-triangle-exclamation"></i> Certificate expires in {{ s.days_remaining }} days</div>
+          {% else %}
+          <div class="alert alert-ok"><i class="fa-solid fa-circle-check"></i> Certificate is valid ({{ s.days_remaining }} days remaining)</div>
+          {% endif %}
+          <div class="table-wrap">
+            <table class="info-table">
+              <tbody>
+                <tr><th>Subject CN</th><td>{{ s.subject.common_name or '—' }}</td></tr>
+                <tr><th>Issuer</th><td>{{ s.issuer.common_name or '—' }}{% if s.issuer.organization %} ({{ s.issuer.organization }}){% endif %}</td></tr>
+                <tr><th>Valid From</th><td>{{ s.not_before }}</td></tr>
+                <tr><th>Valid Until</th><td>{{ s.not_after }}</td></tr>
+                <tr><th>Protocol</th><td>{{ s.protocol }}</td></tr>
+                <tr><th>Cipher Suite</th><td>{{ s.cipher or '—' }}</td></tr>
+                <tr><th>Key Type</th><td>{{ s.key_type }}</td></tr>
+                <tr><th>Key Size</th><td>{% if s.key_size %}{{ s.key_size }} bits{% else %}—{% endif %}</td></tr>
+                <tr><th>Signature Alg</th><td>{{ s.signature_algorithm }}</td></tr>
+                <tr><th>Serial Number</th><td class="mono-small">{{ s.serial_number }}</td></tr>
+                <tr><th>SHA-256 Fingerprint</th><td class="mono-small">{{ s.fingerprint_sha256 }}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          {% if s.san %}
+          <div class="subsection">
+            <h3>Subject Alternative Names (SANs)</h3>
+            <ul class="tag-list">
+              {% for san in s.san %}<li class="tag tag-sm">{{ san }}</li>{% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+        {% endif %}
+      </section>
+
+      <!-- Geolocation -->
+      <section id="geo" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-earth-europe"></i> IP Geolocation</h2>
+        {% set g = data.geo %}
+        {% if g.error and not g.ipv4 and not g.ipv6 %}
+          <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> {{ g.error }}</div>
+        {% else %}
+
+          {% macro geo_table(geo, label) %}
+          <div class="subsection">
+            <h3>{{ label }} &mdash; <code>{{ geo.ip }}</code></h3>
+            {% if geo.error %}
+              <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> {{ geo.error }}</div>
+            {% else %}
+            <div class="table-wrap">
+              <table class="info-table">
+                <tbody>
+                  <tr><th>Country</th><td>{{ geo.country or '—' }}</td></tr>
+                  <tr><th>Region</th><td>{{ geo.region or '—' }}</td></tr>
+                  <tr><th>City</th><td>{{ geo.city or '—' }}</td></tr>
+                  <tr><th>ZIP / Postal</th><td>{{ geo.zip or '—' }}</td></tr>
+                  <tr><th>Coordinates</th><td>{% if geo.lat and geo.lon %}{{ geo.lat }}, {{ geo.lon }}{% else %}—{% endif %}</td></tr>
+                  <tr><th>Timezone</th><td>{{ geo.timezone or '—' }}</td></tr>
+                  <tr><th>ISP</th><td>{{ geo.isp or '—' }}</td></tr>
+                  <tr><th>Organization</th><td>{{ geo.org or '—' }}</td></tr>
+                  <tr><th>ASN</th><td>{{ geo.asn or '—' }}</td></tr>
+                  <tr><th>Proxy / VPN</th><td><span class="badge {% if geo.is_proxy %}badge-warn{% else %}badge-ok{% endif %}">{{ 'Yes' if geo.is_proxy else 'No' }}</span></td></tr>
+                  <tr><th>Hosting / DC</th><td><span class="badge {% if geo.is_hosting %}badge-info{% else %}badge-ok{% endif %}">{{ 'Yes' if geo.is_hosting else 'No' }}</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            {% if geo.lat and geo.lon %}
+            <div class="map-link">
+              <a href="https://www.openstreetmap.org/?mlat={{ geo.lat }}&mlon={{ geo.lon }}&zoom=10" target="_blank" rel="noopener">
+                <i class="fa-solid fa-map-location-dot"></i> View on OpenStreetMap
+              </a>
+            </div>
+            {% endif %}
+            {% endif %}
+          </div>
+          {% endmacro %}
+
+          {% if g.ipv4 %}{{ geo_table(g.ipv4, "IPv4") }}{% endif %}
+          {% if g.ipv6 %}{{ geo_table(g.ipv6, "IPv6") }}{% endif %}
+
+        {% endif %}
+      </section>
+
+      <!-- ASN / BGP -->
+      <section id="asn" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-network-wired"></i> ASN / BGP Information</h2>
+        {% set a = data.asn %}
+        {% if a.error %}
+          <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> {{ a.error }}</div>
+        {% else %}
+          <div class="table-wrap">
+            <table class="info-table">
+              <tbody>
+                <tr><th>IP Address</th><td><code>{{ a.ip }}</code></td></tr>
+                {% if a.asn %}<tr><th>ASN</th><td><strong>AS{{ a.asn.asn }}</strong> — {{ a.asn.name or a.asn.description or '—' }}</td></tr>{% endif %}
+                {% if a.prefix.prefix %}<tr><th>BGP Prefix</th><td><code>{{ a.prefix.prefix }}</code></td></tr>{% endif %}
+                {% if a.prefix.name %}<tr><th>Prefix Name</th><td>{{ a.prefix.name }}</td></tr>{% endif %}
+                {% if a.asn_detail.country_code %}<tr><th>Country</th><td>{{ a.asn_detail.country_code }}</td></tr>{% endif %}
+                {% if a.asn_detail.rir %}<tr><th>RIR</th><td>{{ a.asn_detail.rir }}</td></tr>{% endif %}
+                {% if a.rir.prefix %}<tr><th>RIR Allocation</th><td><code>{{ a.rir.prefix }}</code>{% if a.rir.date_allocated %} — allocated {{ a.rir.date_allocated[:10] }}{% endif %}</td></tr>{% endif %}
+                {% if a.asn_detail.website %}<tr><th>ASN Website</th><td><a href="{{ a.asn_detail.website }}" target="_blank" rel="noopener">{{ a.asn_detail.website }}</a></td></tr>{% endif %}
+                {% if a.asn_detail.looking_glass %}<tr><th>Looking Glass</th><td><a href="{{ a.asn_detail.looking_glass }}" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> {{ a.asn_detail.looking_glass }}</a></td></tr>{% endif %}
+                {% if a.asn_detail.date_allocated %}<tr><th>ASN Allocated</th><td>{{ a.asn_detail.date_allocated[:10] }}</td></tr>{% endif %}
+                {% if a.asn_detail.emails %}<tr><th>Contact Email(s)</th><td>{% for e in a.asn_detail.emails %}{{ e }} {% endfor %}</td></tr>{% endif %}
+                {% if a.asn_detail.abuse %}<tr><th>Abuse Contact(s)</th><td>{% for e in a.asn_detail.abuse %}{{ e }} {% endfor %}</td></tr>{% endif %}
+              </tbody>
+            </table>
+          </div>
+          {% if a.announced_prefixes %}
+          <div class="subsection">
+            <h3>Announced Prefixes <span class="section-summary" style="font-size:0.78rem;">(showing {{ a.announced_prefixes|length }} of {{ a.prefix_count }})</span></h3>
+            <div class="table-wrap">
+              <table class="info-table">
+                <thead><tr><th>Prefix</th><th>Name</th><th>Country</th></tr></thead>
+                <tbody>
+                  {% for p in a.announced_prefixes %}
+                  <tr>
+                    <td><code>{{ p.prefix }}</code></td>
+                    <td>{{ p.name or p.description or '—' }}</td>
+                    <td>{{ p.country_code or '—' }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {% endif %}
+        {% endif %}
+      </section>
+
+      <!-- HTTP Headers -->
+      <section id="headers" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-satellite-dish"></i> HTTP Response Headers</h2>
+        {% set h = data.headers %}
+        {% if h.error %}
+          <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> {{ h.error }}</div>
+        {% else %}
+          <div class="header-meta">
+            <span class="status-code status-{{ (h.status_code // 100) }}xx">HTTP {{ h.status_code }}</span>
+            <span class="security-grade grade-{{ h.security_grade | lower }}">Security Grade: {{ h.security_grade }}</span>
+            {% if h.hsts_preloaded %}
+            <span class="badge badge-ok"><i class="fa-solid fa-shield-halved"></i> HSTS Preloaded</span>
+            {% elif h.security_headers.HSTS and h.security_headers.HSTS.present %}
+            <span class="badge badge-warn"><i class="fa-solid fa-shield-halved"></i> HSTS (not preloaded)</span>
+            {% endif %}
+          </div>
+          {% if h.redirect_chain | length > 1 %}
+          <div class="subsection">
+            <h3>Redirect Chain</h3>
+            <ol class="redirect-chain">
+              {% for url in h.redirect_chain %}<li>{{ url }}</li>{% endfor %}
+            </ol>
+          </div>
+          {% endif %}
+          <div class="subsection">
+            <h3>Security Headers</h3>
+            <div class="security-grid">
+              {% for name, info in h.security_headers.items() %}
+              <div class="sec-header {% if info.present %}present{% else %}missing{% endif %}">
+                <span class="sec-status">
+                  {% if info.present %}<i class="fa-solid fa-check"></i>{% else %}<i class="fa-solid fa-xmark"></i>{% endif %}
+                </span>
+                <span class="sec-name">{{ name }}</span>
+                {% if info.value %}<span class="sec-value" title="{{ info.value }}">{{ info.value | truncate(60) }}</span>{% endif %}
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="subsection">
+            <h3>All Headers</h3>
+            <div class="headers-raw">
+              {% for k, v in h.headers.items() %}
+              <div class="header-row">
+                <span class="header-key">{{ k }}:</span>
+                <span class="header-val">{{ v }}</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      </section>
+
+      <!-- WAF / CDN Detection -->
+      <section id="waf" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-tower-broadcast"></i> WAF / CDN Detection</h2>
+        {% set wf = data.waf %}
+        {% if wf and wf.error %}
+          <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> {{ wf.error }}</div>
+        {% elif wf %}
+          {% if wf.server_header %}
+          <p class="section-summary"><i class="fa-solid fa-server"></i> Server: <code>{{ wf.server_header }}</code></p>
+          {% endif %}
+          {% if wf.count == 0 %}
+          <div class="alert alert-warn"><i class="fa-solid fa-circle-info"></i> No known WAF or CDN signatures detected.</div>
+          {% else %}
+          <div class="saas-grid">
+            {% for item in wf.detected %}
+            <div class="saas-card">
+              <div class="saas-name"><i class="fa-solid fa-shield-halved"></i> {{ item.name }}</div>
+              <div class="saas-match"><span class="badge badge-info">{{ item.category }}</span></div>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        {% endif %}
+      </section>
+
+      <!-- Cookie Analysis -->
+      <section id="cookies" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-cookie-bite"></i> Cookie Security</h2>
+        {% set ck = data.cookies %}
+        {% if ck and ck.error %}
+          <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> {{ ck.error }}</div>
+        {% elif ck and ck.count == 0 %}
+          <div class="alert alert-ok"><i class="fa-solid fa-circle-check"></i> No cookies set by this domain.</div>
+        {% elif ck %}
+          {% if ck.insecure_count > 0 %}
+          <div class="alert alert-warn"><i class="fa-solid fa-triangle-exclamation"></i> {{ ck.insecure_count }} of {{ ck.count }} cookie(s) have security issues.</div>
+          {% else %}
+          <div class="alert alert-ok"><i class="fa-solid fa-circle-check"></i> All {{ ck.count }} cookie(s) have proper security flags.</div>
+          {% endif %}
+          <div class="table-wrap">
+            <table class="info-table">
+              <thead>
+                <tr><th>Name</th><th>HttpOnly</th><th>Secure</th><th>SameSite</th><th>Expires</th><th>Issues</th></tr>
+              </thead>
+              <tbody>
+                {% for c in ck.cookies %}
+                <tr>
+                  <td><code>{{ c.name }}</code></td>
+                  <td>{% if c.http_only %}<span class="badge badge-ok"><i class="fa-solid fa-check"></i></span>{% else %}<span class="badge badge-error"><i class="fa-solid fa-xmark"></i></span>{% endif %}</td>
+                  <td>{% if c.secure %}<span class="badge badge-ok"><i class="fa-solid fa-check"></i></span>{% else %}<span class="badge badge-error"><i class="fa-solid fa-xmark"></i></span>{% endif %}</td>
+                  <td>{% if c.samesite %}<span class="badge badge-ok">{{ c.samesite }}</span>{% else %}<span class="badge badge-warn">—</span>{% endif %}</td>
+                  <td><small>{{ c.expires }}</small></td>
+                  <td>
+                    {% if c.issues %}
+                      {% for issue in c.issues %}<span class="badge badge-warn">{{ issue }}</span> {% endfor %}
+                    {% else %}<span class="badge badge-ok">OK</span>{% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      </section>
+
+      <!-- Reverse DNS -->
+      <section id="reverse" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-rotate-left"></i> Reverse DNS (PTR)</h2>
+        {% set r = data.reverse_dns %}
+        {% if r.error %}
+          <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> {{ r.error }}</div>
+        {% else %}
+          <div class="table-wrap">
+            <table class="info-table">
+              <thead><tr><th>IP Address</th><th>Family</th><th>PTR Record(s)</th></tr></thead>
+              <tbody>
+                {% for ip, info in r.ptr_records.items() %}
+                <tr>
+                  <td><code>{{ ip }}</code></td>
+                  <td><span class="badge badge-info">{{ info.family }}</span></td>
+                  <td>
+                    {% for ptr in info.ptrs %}
+                    <div>{{ ptr }}</div>
+                    {% endfor %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      </section>
+
+      <!-- Email Security -->
+      <section id="email" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-envelope-circle-check"></i> Email Security</h2>
+        {% set em = data.email_sec %}
+        {% if em.error %}
+          <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> {{ em.error }}</div>
+        {% else %}
+
+          <!-- SPF -->
+          <div class="subsection">
+            <h3>SPF Record
+              <span class="badge {% if em.spf.found %}badge-ok{% else %}badge-danger{% endif %}">
+                {{ 'Found' if em.spf.found else 'Missing' }}
+              </span>
+            </h3>
+            {% if em.spf.found %}
+              <div class="record-box"><code>{{ em.spf.record }}</code></div>
+              <div class="table-wrap">
+                <table class="info-table">
+                  <tbody>
+                    <tr><th>Policy</th><td>{{ em.spf.analysis.policy }}</td></tr>
+                    <tr><th>All Mechanism</th><td>{{ em.spf.analysis.all_mechanism or '—' }}</td></tr>
+                    {% if em.spf.analysis.includes %}
+                    <tr><th>Includes</th><td>{% for inc in em.spf.analysis.includes %}<code>{{ inc }}</code> {% endfor %}</td></tr>
+                    {% endif %}
+                    {% if em.spf.analysis.ip4 %}
+                    <tr><th>IPv4 Ranges</th><td>{% for ip in em.spf.analysis.ip4 %}<code>{{ ip }}</code> {% endfor %}</td></tr>
+                    {% endif %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="alert alert-warn"><i class="fa-solid fa-triangle-exclamation"></i> No SPF record found. Emails from this domain cannot be verified.</div>
+            {% endif %}
+          </div>
+
+          <!-- DMARC -->
+          <div class="subsection">
+            <h3>DMARC Record
+              <span class="badge {% if em.dmarc.found %}badge-ok{% else %}badge-danger{% endif %}">
+                {{ 'Found' if em.dmarc.found else 'Missing' }}
+              </span>
+            </h3>
+            {% if em.dmarc.found %}
+              <div class="record-box"><code>{{ em.dmarc.record }}</code></div>
+              <div class="table-wrap">
+                <table class="info-table">
+                  <tbody>
+                    <tr><th>Policy (p=)</th><td><span class="badge {% if em.dmarc.analysis.policy == 'reject' %}badge-ok{% elif em.dmarc.analysis.policy == 'quarantine' %}badge-warn{% else %}badge-danger{% endif %}">{{ em.dmarc.analysis.policy }}</span></td></tr>
+                    <tr><th>Subdomain Policy</th><td>{{ em.dmarc.analysis.subdomain_policy }}</td></tr>
+                    <tr><th>Percentage (pct=)</th><td>{{ em.dmarc.analysis.pct }}%</td></tr>
+                    {% if em.dmarc.analysis.rua %}<tr><th>Aggregate Reports (rua=)</th><td>{{ em.dmarc.analysis.rua }}</td></tr>{% endif %}
+                    {% if em.dmarc.analysis.ruf %}<tr><th>Forensic Reports (ruf=)</th><td>{{ em.dmarc.analysis.ruf }}</td></tr>{% endif %}
+                    <tr><th>DKIM Alignment</th><td>{{ 'Relaxed' if em.dmarc.analysis.adkim == 'r' else 'Strict' }}</td></tr>
+                    <tr><th>SPF Alignment</th><td>{{ 'Relaxed' if em.dmarc.analysis.aspf == 'r' else 'Strict' }}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="alert alert-warn"><i class="fa-solid fa-triangle-exclamation"></i> No DMARC record found. Domain is vulnerable to email spoofing.</div>
+            {% endif %}
+          </div>
+
+          <!-- DKIM -->
+          <div class="subsection">
+            <h3>DKIM Records
+              <span class="badge {% if em.dkim.found %}badge-ok{% else %}badge-danger{% endif %}">
+                {{ 'Found (' + em.dkim.selectors | length | string + ' selector' + ('s' if em.dkim.selectors | length != 1 else '') + ')' if em.dkim.found else 'Not Found' }}
+              </span>
+            </h3>
+            {% if em.dkim.found %}
+              {% for sel in em.dkim.selectors %}
+              <div class="dkim-entry">
+                <strong>Selector:</strong> <code>{{ sel.selector }}</code>
+                {% if sel.has_public_key %}<span class="badge badge-ok badge-sm">Public Key Present</span>{% endif %}
+                <div class="record-box record-box-sm"><code>{{ sel.record }}</code></div>
+              </div>
+              {% endfor %}
+            {% else %}
+              <div class="alert alert-warn"><i class="fa-solid fa-triangle-exclamation"></i> No DKIM selectors found from common list.</div>
+            {% endif %}
+          </div>
+
+          <!-- BIMI -->
+          {% if em.bimi.found %}
+          <div class="subsection">
+            <h3>BIMI Record <span class="badge badge-ok">Found</span></h3>
+            <div class="record-box"><code>{{ em.bimi.record }}</code></div>
+          </div>
+          {% endif %}
+
+          <!-- MTA-STS -->
+          {% if em.mta_sts.found %}
+          <div class="subsection">
+            <h3>MTA-STS <span class="badge badge-ok">Enabled</span></h3>
+            <div class="record-box"><code>{{ em.mta_sts.record }}</code></div>
+          </div>
+          {% endif %}
+
+        {% endif %}
+      </section>
+
+      <!-- Certificate Transparency -->
+      <section id="ct" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-scroll"></i> Certificate Transparency</h2>
+        {% set ct = data.cert_transparency %}
+        {% if ct.error %}
+          <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> {{ ct.error }}</div>
+        {% else %}
+          <p class="section-summary">
+            Found <strong>{{ ct.count }}</strong> certificate{{ 's' if ct.count != 1 else '' }} logged,
+            revealing <strong>{{ ct.subdomain_count }}</strong> unique hostname{{ 's' if ct.subdomain_count != 1 else '' }}.
+          </p>
+
+          {% if ct.subdomains %}
+          <div class="subsection">
+            <h3>Hostnames discovered via CT logs</h3>
+            <ul class="tag-list">
+              {% for sub in ct.subdomains %}<li class="tag tag-sm">{{ sub }}</li>{% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+
+          {% if ct.certs %}
+          <div class="subsection">
+            <h3>Recent certificates ({{ [ct.certs|length, ct.count]|min }} of {{ ct.count }})</h3>
+            <div class="table-wrap">
+              <table class="info-table">
+                <thead>
+                  <tr><th>Logged</th><th>Issuer</th><th>Common Name</th><th>Valid From</th><th>Valid Until</th><th>crt.sh</th></tr>
+                </thead>
+                <tbody>
+                  {% for cert in ct.certs %}
+                  <tr>
+                    <td>{{ cert.logged_at }}</td>
+                    <td>{{ cert.issuer }}</td>
+                    <td><code>{{ cert.common_name }}</code></td>
+                    <td>{{ cert.not_before }}</td>
+                    <td>{{ cert.not_after }}</td>
+                    <td><a href="https://crt.sh/?id={{ cert.id }}" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> #{{ cert.id }}</a></td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {% endif %}
+        {% endif %}
+      </section>
+
+      <!-- HTML Subdomains -->
+      <section id="html-subs" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-code"></i> HTML Subdomain Discovery</h2>
+        {% set hs = data.html_subdomains %}
+        {% if hs.error %}
+          <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> {{ hs.error }}</div>
+        {% else %}
+          <p class="section-summary">
+            Found <strong>{{ hs.count }}</strong> subdomain{{ 's' if hs.count != 1 else '' }}
+            referenced in the page source of
+            <a href="{{ hs.scanned_url }}" target="_blank" rel="noopener">{{ hs.scanned_url }}</a>.
+          </p>
+          {% if hs.found %}
+            <ul class="tag-list">
+              {% for entry in hs.found %}
+              <li class="tag tag-sm"><i class="fa-solid fa-at"></i> {{ entry.subdomain }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="alert alert-info"><i class="fa-solid fa-circle-info"></i> No subdomains of <strong>{{ domain }}</strong> were found in the page HTML.</div>
+          {% endif %}
+        {% endif %}
+      </section>
+
+      <!-- Screenshot -->
+      <section id="screenshot" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-camera"></i> Website Screenshot</h2>
+        {% set sc = data.screenshot %}
+        {% if not sc.enabled %}
+          <div class="alert alert-info">
+            <i class="fa-solid fa-circle-info"></i>
+            Screenshot capture is disabled or Playwright is not installed.<br/>
+            <code>pip install playwright &amp;&amp; playwright install chromium</code>
+          </div>
+        {% elif sc.error %}
+          <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> {{ sc.error }}</div>
+        {% elif sc.path %}
+          {% if sc.cached %}<p class="section-summary"><i class="fa-solid fa-bolt"></i> Cached screenshot</p>{% endif %}
+          <div class="screenshot-wrap">
+            <img src="{{ sc.path }}" alt="Screenshot of {{ domain }}" class="screenshot-img" loading="lazy" />
+          </div>
+        {% else %}
+          <div class="alert alert-warn"><i class="fa-solid fa-triangle-exclamation"></i> Screenshot could not be captured.</div>
+        {% endif %}
+      </section>
+
+      <!-- Tech Detection -->
+      <section id="tech" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-gears"></i> Technology Stack</h2>
+        {% set t = data.tech %}
+        {% if t.error and t.count == 0 %}
+          <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> {{ t.error }}</div>
+        {% elif t.count == 0 %}
+          <div class="alert alert-info"><i class="fa-solid fa-circle-info"></i> No technologies detected.</div>
+        {% else %}
+          <p class="section-summary">Detected <strong>{{ t.count }}</strong> technologies.</p>
+          {% for category, techs in t.by_category.items() %}
+          <div class="tech-category">
+            <h3>{{ category }}</h3>
+            <ul class="tag-list">
+              {% for tech in techs %}
+              <li class="tag tag-tech">{{ tech }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endfor %}
+        {% endif %}
+      </section>
+
+      <!-- SaaS Services -->
+      <section id="saas" class="card">
+        <h2 class="card-title"><i class="fa-solid fa-cloud"></i> SaaS Services</h2>
+        {% set ss = data.saas %}
+        {% if not ss or ss.count == 0 %}
+          <div class="alert alert-warn"><i class="fa-solid fa-circle-info"></i> No SaaS services detected in TXT records.</div>
+        {% else %}
+          <p class="section-summary"><i class="fa-solid fa-circle-check"></i> <strong>{{ ss.count }}</strong> service{{ 's' if ss.count != 1 }} detected from DNS TXT records.</p>
+          {% for category, services in ss.by_category.items() %}
+          <div class="subsection">
+            <h3>{{ category }}</h3>
+            <div class="saas-grid">
+              {% for svc in services %}
+              <div class="saas-card">
+                <div class="saas-name"><a href="{{ svc.url }}" target="_blank" rel="noopener">{{ svc.name }} <i class="fa-solid fa-arrow-up-right-from-square fa-xs"></i></a></div>
+                <div class="saas-match"><code>{{ svc.matched_record }}</code></div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+        {% endif %}
+      </section>
+
+    </main>
+  </div>
+
+  <footer class="results-footer">
+    <p>Analysis for <strong>{{ domain }}</strong> &bull;
+      {% if from_cache %}<i class="fa-solid fa-bolt"></i> Served from cache{% else %}Fresh lookup{% endif %}
+      &bull; <a href="/"><i class="fa-solid fa-magnifying-glass"></i> New search</a>
+      &bull; <button class="footer-link" id="aboutBtnFooter"><i class="fa-solid fa-circle-info"></i> About</button></p>
+  </footer>
+
+</div>
+
+<!-- About modal -->
+<div class="modal-backdrop" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+  <div class="modal-box">
+    <button class="modal-close" id="aboutClose" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+    <div class="modal-logo">
+      <span class="logo-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
+      <span class="logo-text">DNS<strong>Spy</strong></span>
+    </div>
+    <p id="aboutTitle" class="modal-tagline">Comprehensive domain intelligence in one click</p>
+    <div class="modal-section">
+      <h3><i class="fa-solid fa-layer-group"></i> What it does</h3>
+      <p>DNS Spy runs 16+ analysis modules in parallel — WHOIS, RDAP, DNS records, SSL/TLS, Geolocation, ASN/BGP, HTTP headers, WAF detection, cookie security, reverse DNS, email security (SPF/DMARC/DKIM), certificate transparency, HTML subdomains, screenshot, tech stack, SaaS detection, and an aggregate security score.</p>
+    </div>
+    <div class="modal-section">
+      <h3><i class="fa-solid fa-user"></i> Author</h3>
+      <p><strong>Julien Mousqueton</strong><br>CISO @ Cohesity<br>Owner of <a href="https://www.ransomware.live" target="_blank" rel="noopener">ransomware.live</a></p>
+    </div>
+    <div class="modal-section">
+      <h3><i class="fa-solid fa-code"></i> Stack</h3>
+      <p>Python 3 · Flask · dnspython · requests · Playwright (screenshots) · Vanilla JS</p>
+    </div>
+    <div class="modal-footer-note">Built for internal security &amp; recon workflows.</div>
+  </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+</body>
+</html>

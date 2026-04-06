@@ -22,6 +22,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxkbcommon0 \
     libxrandr2 \
     xdg-utils \
+    libicu74 \
+    libgstreamer-plugins-bad1.0-0 \
+    libflite1 \
+    libwebpdemux2 \
+    libavif16 \
+    libharfbuzz-icu0 \
+    libmanette-0.2-0 \
+    libhyphen0 \
+    libwoff1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -29,8 +38,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright Chromium browser
-RUN playwright install chromium
+# Install Playwright Chromium browser and all its system dependencies
+RUN playwright install-deps chromium && playwright install chromium
 
 COPY . .
 

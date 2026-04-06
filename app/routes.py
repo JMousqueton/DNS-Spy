@@ -1,4 +1,5 @@
 import re
+import socket
 import concurrent.futures
 from urllib.parse import urlparse
 from flask import Blueprint, render_template, request, jsonify, current_app
@@ -51,6 +52,25 @@ def _clean_domain(raw: str) -> str:
     if ":" in domain:
         domain = domain.split(":")[0]
     return domain
+
+
+def _domain_exists(domain: str) -> bool:
+    """Return True if the domain resolves to at least one IP address."""
+    try:
+        from app.dns_client import query as doh_query
+        results = doh_query(domain, "A", timeout=8)
+        if results:
+            return True
+        # Try AAAA as fallback (some domains are IPv6-only)
+        results = doh_query(domain, "AAAA", timeout=8)
+        return bool(results)
+    except Exception:
+        # Last resort: OS resolver
+        try:
+            socket.getaddrinfo(domain, None)
+            return True
+        except socket.gaierror:
+            return False
 
 
 def _run_all_modules(domain: str, config) -> dict:
@@ -119,6 +139,9 @@ def analyze():
     if cached:
         return render_template("results.html", domain=domain, data=cached, from_cache=True)
 
+    if not _domain_exists(domain):
+        return render_template("index.html", error=f"Domain '{domain}' does not exist or could not be resolved.")
+
     config = {
         "SUBDOMAIN_WORDLIST_SIZE": current_app.config.get("SUBDOMAIN_WORDLIST_SIZE", 50),
         "SCREENSHOT_ENABLED": current_app.config.get("SCREENSHOT_ENABLED", True),
@@ -159,6 +182,9 @@ def api_analyze():
     cached = cache.get(cache_key)
     if cached:
         return jsonify({"domain": domain, "cached": True, "data": cached})
+
+    if not _domain_exists(domain):
+        return jsonify({"error": f"Domain '{domain}' does not exist or could not be resolved."}), 404
 
     config = {
         "SUBDOMAIN_WORDLIST_SIZE": current_app.config.get("SUBDOMAIN_WORDLIST_SIZE", 50),

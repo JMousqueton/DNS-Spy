@@ -1,0 +1,10 @@
+services:
+  dns-spy:
+    build: .
+    ports:
+      - "5005:5005"
+    env_file:
+      - .env
+    volumes:
+      - ./static/screenshots:/app/static/screenshots
+    restart: unless-stopped
